@@ -1,4 +1,4 @@
-import { LMStudioClient } from '@lmstudio/sdk';
+import { LMStudioClient, LLM } from '@lmstudio/sdk';
 
 export interface ModelInfo {
   path: string;
@@ -8,7 +8,7 @@ export interface ModelInfo {
 
 class LMStudioService {
   private client: LMStudioClient | null = null;
-  private model: any = null;
+  private model: LLM | null = null;
   private currentModelId: string | null = null;
 
   async connect(): Promise<boolean> {
@@ -33,7 +33,7 @@ class LMStudioService {
     try {
       console.log('Fetching loaded models from LM Studio SDK...');
       
-      // Get list of loaded models
+      // Get list of loaded models - returns LLM[]
       const loadedModels = await this.client.llm.listLoaded();
       console.log('Loaded models:', loadedModels);
       
@@ -42,29 +42,14 @@ class LMStudioService {
         return [];
       }
       
-      // Process loaded models
+      // Process loaded models - each model is an LLM instance
       const models: ModelInfo[] = [];
       for (const model of loadedModels) {
-        // Get model info
-        let modelInfo: ModelInfo;
-        
-        if (typeof model === 'string') {
-          modelInfo = {
-            path: model,
-            identifier: model,
-            name: model.split('/').pop() || model
-          };
-        } else if (model && typeof model === 'object') {
-          // Try to get model info
-          const info = await model.getInfo?.();
-          modelInfo = {
-            path: info?.modelKey || model.modelKey || model.id || 'unknown',
-            identifier: info?.modelKey || model.modelKey || model.id || 'unknown',
-            name: info?.displayName || model.displayName || model.name || 'unknown'
-          };
-        } else {
-          continue;
-        }
+        const modelInfo: ModelInfo = {
+          path: model.path,
+          identifier: model.identifier,
+          name: model.displayName || model.identifier
+        };
         
         models.push(modelInfo);
         console.log('Added model:', modelInfo);
@@ -124,18 +109,24 @@ class LMStudioService {
     }
 
     try {
-      // Use SDK for streaming
-      const stream = this.model.respond(message, {
-        stream: true,
+      // Use SDK for streaming - respond returns an async iterable
+      const prediction = this.model.respond([{
+        role: 'user',
+        content: message
+      }], {
         temperature: 0.7,
         maxTokens: 2000
       });
 
-      for await (const chunk of stream) {
-        if (chunk.content) {
-          onChunk(chunk.content);
+      // Stream the response
+      for await (const fragment of prediction) {
+        if (fragment.content) {
+          onChunk(fragment.content);
         }
       }
+      
+      // Wait for completion
+      await prediction;
     } catch (error: any) {
       console.error('Streaming error:', error);
       throw error;
@@ -149,7 +140,10 @@ class LMStudioService {
 
     try {
       // Use SDK for non-streaming response
-      const result = await this.model.respond(message, {
+      const result = await this.model.respond([{
+        role: 'user',
+        content: message
+      }], {
         temperature: 0.7,
         maxTokens: 2000
       });
