@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { LLM } from '../services/lmStudioClient'
 
 interface ModelSelectorProps {
-  models: LLM[]
+  models: readonly LLM[]
   currentModel: string | null
   onModelSelect: (modelId: string) => void
   isLoading?: boolean
@@ -84,7 +84,7 @@ const ChevronIcon: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
 
 // Model dropdown component
 const ModelDropdown: React.FC<{
-  models: LLM[]
+  models: readonly LLM[]
   currentModel: string | null
   onSelect: (modelId: string) => void
 }> = ({ models, currentModel, onSelect }) => (

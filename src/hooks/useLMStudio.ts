@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   LLM,
   LMStudioConnection,
@@ -9,8 +9,18 @@ import {
   hasLoadedModel,
 } from '../services/lmStudioClient'
 import { ChatMessage, ChatState } from '../types/chat'
+import {
+  isLMStudioError,
+  getErrorMessage,
+  ConnectionError,
+  ModelLoadError,
+} from '../types/errors'
+import { ERROR_MESSAGES } from '../constants/lmstudio'
 
-// Custom hook for LM Studio connection and chat management
+/**
+ * Custom hook for LM Studio connection and chat management
+ * Provides a declarative interface for AI chat functionality
+ */
 export const useLMStudio = () => {
   const [state, setState] = useState<ChatState>({
     messages: [],
@@ -20,41 +30,14 @@ export const useLMStudio = () => {
   })
 
   const [connection, setConnection] = useState<LMStudioConnection | null>(null)
-  const [models, setModels] = useState<LLM[]>([])
+  const [models, setModels] = useState<readonly LLM[]>([])
   const [isLoadingModels, setIsLoadingModels] = useState(false)
 
-  // Connection effect
-  useEffect(() => {
-    const connect = async () => {
-      setState((prev) => ({ ...prev, error: null, isLoading: true }))
-
-      try {
-        const newConnection = await createConnection()
-        setConnection(newConnection)
-        setState((prev) => ({
-          ...prev,
-          isConnected: true,
-          error: null,
-          isLoading: false,
-        }))
-
-        // Load models after successful connection
-        await loadAvailableModels(newConnection)
-      } catch (error: any) {
-        setState((prev) => ({
-          ...prev,
-          isConnected: false,
-          error: error.message || 'Failed to connect to LM Studio',
-          isLoading: false,
-        }))
-      }
-    }
-
-    connect()
-  }, [])
+  // Use ref to store the AI message ID to avoid closure issues
+  const currentAiMessageId = useRef<string | null>(null)
 
   // Load available models
-  const loadAvailableModels = async (conn: LMStudioConnection) => {
+  const loadAvailableModels = useCallback(async (conn: LMStudioConnection) => {
     setIsLoadingModels(true)
 
     try {
@@ -64,11 +47,10 @@ export const useLMStudio = () => {
       // Auto-select first model if available
       if (availableModels.length > 0 && !conn.modelId) {
         const firstModel = availableModels[0].identifier
-        // Load model directly with the connection we have
         try {
           const updatedConnection = await loadModel(conn, firstModel)
           setConnection(updatedConnection)
-        } catch (error: any) {
+        } catch (error) {
           console.error('Failed to auto-load first model:', error)
         }
       }
@@ -77,26 +59,72 @@ export const useLMStudio = () => {
     } finally {
       setIsLoadingModels(false)
     }
-  }
+  }, [])
+
+  // Connection effect
+  useEffect(() => {
+    let mounted = true
+
+    const connect = async () => {
+      if (!mounted) return
+
+      setState((prev) => ({ ...prev, error: null, isLoading: true }))
+
+      try {
+        const newConnection = await createConnection()
+        if (!mounted) return
+
+        setConnection(newConnection)
+        setState((prev) => ({
+          ...prev,
+          isConnected: true,
+          error: null,
+          isLoading: false,
+        }))
+
+        await loadAvailableModels(newConnection)
+      } catch (error) {
+        if (!mounted) return
+
+        const errorMessage = error instanceof ConnectionError
+          ? error.message
+          : getErrorMessage(error)
+
+        setState((prev) => ({
+          ...prev,
+          isConnected: false,
+          error: errorMessage,
+          isLoading: false,
+        }))
+      }
+    }
+
+    connect()
+
+    return () => {
+      mounted = false
+    }
+  }, [loadAvailableModels])
 
   // Select a model
-  const selectModel = async (modelId: string) => {
-    if (!connection) {
-      // Connection not established yet - shouldn't happen in normal flow
-      return
-    }
+  const selectModel = useCallback(async (modelId: string) => {
+    if (!connection) return
 
     try {
       setState((prev) => ({ ...prev, error: null }))
       const updatedConnection = await loadModel(connection, modelId)
       setConnection(updatedConnection)
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof ModelLoadError
+        ? error.message
+        : `Failed to load model: ${getErrorMessage(error)}`
+
       setState((prev) => ({
         ...prev,
-        error: `Failed to load model: ${error.message}`,
+        error: errorMessage,
       }))
     }
-  }
+  }, [connection])
 
   // Clear chat messages
   const clearChat = useCallback(() => {
@@ -105,14 +133,13 @@ export const useLMStudio = () => {
       messages: [],
       error: null,
     }))
+    currentAiMessageId.current = null
   }, [])
 
   // Send a message and handle streaming response
   const sendMessage = useCallback(
     async (text: string) => {
       if (!connection || !hasLoadedModel(connection)) {
-        // Don't set error state - just silently return
-        // The UI already shows model selection state
         return
       }
 
@@ -124,8 +151,11 @@ export const useLMStudio = () => {
         isStreaming: false,
       }
 
+      const aiMessageId = crypto.randomUUID()
+      currentAiMessageId.current = aiMessageId
+
       const aiMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: aiMessageId,
         role: 'assistant',
         content: '',
         timestamp: new Date(),
@@ -150,7 +180,9 @@ export const useLMStudio = () => {
           setState((prev) => ({
             ...prev,
             messages: prev.messages.map((msg) =>
-              msg.id === aiMessage.id ? { ...msg, content: fullResponse } : msg
+              msg.id === aiMessageId
+                ? { ...msg, content: fullResponse }
+                : msg
             ),
           }))
         })
@@ -159,33 +191,40 @@ export const useLMStudio = () => {
         setState((prev) => ({
           ...prev,
           messages: prev.messages.map((msg) =>
-            msg.id === aiMessage.id ? { ...msg, isStreaming: false } : msg
+            msg.id === aiMessageId
+              ? { ...msg, isStreaming: false }
+              : msg
           ),
           isLoading: false,
         }))
       } catch (error) {
-        // Handle error
+        const errorMessage = isLMStudioError(error)
+          ? ERROR_MESSAGES.STREAMING_FAILED
+          : ERROR_MESSAGES.GENERIC_ERROR
+
         setState((prev) => ({
           ...prev,
           messages: prev.messages.map((msg) =>
-            msg.id === aiMessage.id
+            msg.id === aiMessageId
               ? {
                   ...msg,
-                  content: 'Sorry, I encountered an error. Please try again.',
+                  content: errorMessage,
                   isStreaming: false,
                 }
               : msg
           ),
           isLoading: false,
-          error: 'Failed to get response. Please check your connection.',
+          error: ERROR_MESSAGES.STREAMING_FAILED,
         }))
+      } finally {
+        currentAiMessageId.current = null
       }
     },
     [connection]
   )
 
   // Reconnect function
-  const reconnect = async () => {
+  const reconnect = useCallback(async () => {
     setState((prev) => ({ ...prev, error: null, isLoading: true }))
 
     try {
@@ -199,21 +238,45 @@ export const useLMStudio = () => {
       }))
 
       await loadAvailableModels(newConnection)
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof ConnectionError
+        ? error.message
+        : getErrorMessage(error)
+
       setState((prev) => ({
         ...prev,
         isConnected: false,
-        error: error.message || 'Failed to connect to LM Studio',
+        error: errorMessage,
         isLoading: false,
       }))
     }
-  }
+  }, [loadAvailableModels])
+
+  // Memoize computed values
+  const canSendMessage = useMemo(
+    () =>
+      state.isConnected &&
+      !state.isLoading &&
+      connection !== null &&
+      hasLoadedModel(connection),
+    [state.isConnected, state.isLoading, connection]
+  )
+
+  const hasMessages = useMemo(
+    () => state.messages.length > 0,
+    [state.messages.length]
+  )
+
+  const currentModel = useMemo(
+    () => connection?.modelId || null,
+    [connection?.modelId]
+  )
 
   return {
     // State
     state,
     models,
-    currentModel: connection?.modelId || null,
+    currentModel,
     isLoadingModels,
 
     // Actions
@@ -223,11 +286,7 @@ export const useLMStudio = () => {
     reconnect,
 
     // Computed values
-    canSendMessage:
-      state.isConnected &&
-      !state.isLoading &&
-      connection !== null &&
-      hasLoadedModel(connection),
-    hasMessages: state.messages.length > 0,
+    canSendMessage,
+    hasMessages,
   }
 }
