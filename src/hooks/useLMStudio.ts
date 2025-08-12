@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import lmStudioClient, { LLM } from '../services/lmStudioClient';
+import { 
+  LLM, 
+  LMStudioConnection,
+  createConnection,
+  listModels,
+  loadModel,
+  streamChat,
+  hasLoadedModel
+} from '../services/lmStudioClient';
 import { ChatMessage, ChatState } from '../types/chat';
 
 // Custom hook for LM Studio connection and chat management
@@ -11,8 +19,8 @@ export const useLMStudio = () => {
     error: null
   });
   
+  const [connection, setConnection] = useState<LMStudioConnection | null>(null);
   const [models, setModels] = useState<LLM[]>([]);
-  const [currentModel, setCurrentModel] = useState<string | null>(null);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
 
   // Connection effect
@@ -21,7 +29,8 @@ export const useLMStudio = () => {
       setState(prev => ({ ...prev, error: null, isLoading: true }));
       
       try {
-        await lmStudioClient.connect();
+        const newConnection = await createConnection();
+        setConnection(newConnection);
         setState(prev => ({ 
           ...prev, 
           isConnected: true,
@@ -30,7 +39,7 @@ export const useLMStudio = () => {
         }));
         
         // Load models after successful connection
-        await loadModels();
+        await loadAvailableModels(newConnection);
       } catch (error: any) {
         setState(prev => ({ 
           ...prev, 
@@ -45,17 +54,23 @@ export const useLMStudio = () => {
   }, []);
 
   // Load available models
-  const loadModels = async () => {
+  const loadAvailableModels = async (conn: LMStudioConnection) => {
     setIsLoadingModels(true);
     
     try {
-      const availableModels = await lmStudioClient.getAvailableModels();
+      const availableModels = await listModels(conn);
       setModels(availableModels);
       
       // Auto-select first model if available
-      if (availableModels.length > 0 && !currentModel) {
+      if (availableModels.length > 0 && !conn.modelId) {
         const firstModel = availableModels[0].identifier;
-        await selectModel(firstModel);
+        // Load model directly with the connection we have
+        try {
+          const updatedConnection = await loadModel(conn, firstModel);
+          setConnection(updatedConnection);
+        } catch (error: any) {
+          console.error('Failed to auto-load first model:', error);
+        }
       }
     } catch (error) {
       setModels([]);
@@ -66,10 +81,15 @@ export const useLMStudio = () => {
 
   // Select a model
   const selectModel = async (modelId: string) => {
+    if (!connection) {
+      // Connection not established yet - shouldn't happen in normal flow
+      return;
+    }
+
     try {
       setState(prev => ({ ...prev, error: null }));
-      await lmStudioClient.loadModel(modelId);
-      setCurrentModel(modelId);
+      const updatedConnection = await loadModel(connection, modelId);
+      setConnection(updatedConnection);
     } catch (error: any) {
       setState(prev => ({ 
         ...prev, 
@@ -89,6 +109,12 @@ export const useLMStudio = () => {
 
   // Send a message and handle streaming response
   const sendMessage = useCallback(async (text: string) => {
+    if (!connection || !hasLoadedModel(connection)) {
+      // Don't set error state - just silently return
+      // The UI already shows model selection state
+      return;
+    }
+
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -116,7 +142,7 @@ export const useLMStudio = () => {
     try {
       let fullResponse = '';
       
-      await lmStudioClient.streamChat(text, (chunk) => {
+      await streamChat(connection.model, text, (chunk) => {
         fullResponse += chunk;
         
         // Update AI message content
@@ -157,14 +183,15 @@ export const useLMStudio = () => {
         error: 'Failed to get response. Please check your connection.'
       }));
     }
-  }, []);
+  }, [connection]);
 
   // Reconnect function
   const reconnect = async () => {
     setState(prev => ({ ...prev, error: null, isLoading: true }));
     
     try {
-      await lmStudioClient.connect();
+      const newConnection = await createConnection();
+      setConnection(newConnection);
       setState(prev => ({ 
         ...prev, 
         isConnected: true,
@@ -172,7 +199,7 @@ export const useLMStudio = () => {
         isLoading: false
       }));
       
-      await loadModels();
+      await loadAvailableModels(newConnection);
     } catch (error: any) {
       setState(prev => ({ 
         ...prev, 
@@ -187,7 +214,7 @@ export const useLMStudio = () => {
     // State
     state,
     models,
-    currentModel,
+    currentModel: connection?.modelId || null,
     isLoadingModels,
     
     // Actions
@@ -197,7 +224,7 @@ export const useLMStudio = () => {
     reconnect,
     
     // Computed values
-    canSendMessage: state.isConnected && !state.isLoading && !!currentModel,
+    canSendMessage: state.isConnected && !state.isLoading && connection !== null && hasLoadedModel(connection),
     hasMessages: state.messages.length > 0
   };
 };
