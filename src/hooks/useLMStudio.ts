@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import lmStudioClient, { ModelInfo } from '../services/lmStudioClient';
+import lmStudioClient, { LLM } from '../services/lmStudioClient';
 import { ChatMessage, ChatState } from '../types/chat';
 
 // Custom hook for LM Studio connection and chat management
@@ -11,7 +11,7 @@ export const useLMStudio = () => {
     error: null
   });
   
-  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [models, setModels] = useState<LLM[]>([]);
   const [currentModel, setCurrentModel] = useState<string | null>(null);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
 

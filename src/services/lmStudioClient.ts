@@ -1,10 +1,7 @@
 import { LMStudioClient, LLM } from '@lmstudio/sdk';
 
-export interface ModelInfo {
-  path: string;
-  identifier: string;
-  name?: string;
-}
+// Re-export LLM type for use in components
+export type { LLM } from '@lmstudio/sdk';
 
 class LMStudioService {
   private client: LMStudioClient | null = null;
@@ -25,7 +22,7 @@ class LMStudioService {
     }
   }
 
-  async getAvailableModels(): Promise<ModelInfo[]> {
+  async getAvailableModels(): Promise<LLM[]> {
     if (!this.client) {
       throw new Error('Not connected to LM Studio');
     }
@@ -42,20 +39,7 @@ class LMStudioService {
         return [];
       }
       
-      // Process loaded models - each model is an LLM instance
-      const models: ModelInfo[] = [];
-      for (const model of loadedModels) {
-        const modelInfo: ModelInfo = {
-          path: model.path,
-          identifier: model.identifier,
-          name: model.displayName || model.identifier
-        };
-        
-        models.push(modelInfo);
-        console.log('Added model:', modelInfo);
-      }
-      
-      return models;
+      return loadedModels;
     } catch (error: any) {
       console.error('Failed to fetch models from LM Studio:', error);
       return [];

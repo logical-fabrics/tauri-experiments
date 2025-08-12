@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ModelInfo } from '../services/lmStudioClient';
+import { LLM } from '../services/lmStudioClient';
 
 interface ModelSelectorProps {
-  models: ModelInfo[];
+  models: LLM[];
   currentModel: string | null;
   onModelSelect: (modelId: string) => void;
   isLoading?: boolean;
@@ -37,7 +37,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
   const displayText = isLoading 
     ? 'Loading models...'
     : currentModel 
-      ? `Model: ${models.find(m => m.identifier === currentModel)?.name || currentModel}`
+      ? `Model: ${models.find(m => m.identifier === currentModel)?.displayName || currentModel}`
       : 'Select a model';
 
   return (
@@ -78,7 +78,7 @@ const ChevronIcon: React.FC<{ isOpen: boolean }> = ({ isOpen }) => (
 
 // Model dropdown component
 const ModelDropdown: React.FC<{
-  models: ModelInfo[];
+  models: LLM[];
   currentModel: string | null;
   onSelect: (modelId: string) => void;
 }> = ({ models, currentModel, onSelect }) => (
@@ -98,7 +98,7 @@ const ModelDropdown: React.FC<{
 
 // Model option component
 const ModelOption: React.FC<{
-  model: ModelInfo;
+  model: LLM;
   isSelected: boolean;
   onSelect: () => void;
 }> = ({ model, isSelected, onSelect }) => (
@@ -109,7 +109,7 @@ const ModelOption: React.FC<{
     }`}
   >
     <div className="flex items-center justify-between">
-      <span className="truncate">{model.name}</span>
+      <span className="truncate">{model.displayName}</span>
       {isSelected && <CheckIcon />}
     </div>
     <div className="text-xs text-gray-500 truncate">{model.path}</div>
