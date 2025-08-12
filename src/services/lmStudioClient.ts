@@ -134,18 +134,12 @@ class LMStudioService {
 
     try {
       // Use SDK for non-streaming response
-      const result = await this.model.respond(
-        [
-          {
-            role: "user",
-            content: message,
-          },
-        ],
+      const result = await this.model.respond([
         {
-          temperature: 0.7,
-          maxTokens: 2000,
-        }
-      )
+          role: "user",
+          content: message,
+        },
+      ])
       return result.content
     } catch (error: any) {
       console.error("Response error:", error)
