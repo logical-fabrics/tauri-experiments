@@ -1,7 +1,7 @@
-import { LMStudioClient, LLM } from "@lmstudio/sdk"
+import { LMStudioClient, LLM } from '@lmstudio/sdk'
 
 // Re-export LLM type for use in components
-export type { LLM } from "@lmstudio/sdk"
+export type { LLM } from '@lmstudio/sdk'
 
 // Type definition for connection state
 export type LMStudioConnection = {
@@ -12,24 +12,24 @@ export type LMStudioConnection = {
 
 // Pure utility function for error messages
 export const getDetailedErrorMessage = (error: any): string => {
-  const baseMessage = "Failed to connect to LM Studio. "
+  const baseMessage = 'Failed to connect to LM Studio. '
 
   if (
-    error.message?.includes("ECONNREFUSED") ||
-    error.message?.includes("fetch failed")
+    error.message?.includes('ECONNREFUSED') ||
+    error.message?.includes('fetch failed')
   ) {
     return (
       baseMessage +
-      "Please ensure:\n" +
-      "1. LM Studio is running\n" +
-      "2. The local server is enabled in LM Studio settings\n" +
+      'Please ensure:\n' +
+      '1. LM Studio is running\n' +
+      '2. The local server is enabled in LM Studio settings\n' +
       '3. The model "google/gemma-3n-e4b" is loaded'
     )
   }
 
   if (
-    error.message?.includes("model") ||
-    error.message?.includes("not found")
+    error.message?.includes('model') ||
+    error.message?.includes('not found')
   ) {
     return (
       baseMessage +
@@ -37,24 +37,24 @@ export const getDetailedErrorMessage = (error: any): string => {
     )
   }
 
-  return baseMessage + (error.message || "Unknown error occurred")
+  return baseMessage + (error.message || 'Unknown error occurred')
 }
 
 // Create a new connection to LM Studio
 export const createConnection = async (): Promise<LMStudioConnection> => {
   try {
     const client = new LMStudioClient({
-      baseUrl: "ws://localhost:1234", // Use WebSocket for browser compatibility
+      baseUrl: 'ws://localhost:1234', // Use WebSocket for browser compatibility
     })
-    console.log("Successfully connected to LM Studio!")
-    
+    console.log('Successfully connected to LM Studio!')
+
     return {
       client,
       model: null,
       modelId: null,
     }
   } catch (error: any) {
-    console.error("Failed to connect to LM Studio:", error)
+    console.error('Failed to connect to LM Studio:', error)
     throw new Error(getDetailedErrorMessage(error))
   }
 }
@@ -64,19 +64,19 @@ export const listModels = async (
   connection: LMStudioConnection
 ): Promise<LLM[]> => {
   try {
-    console.log("Fetching loaded models from LM Studio SDK...")
-    
+    console.log('Fetching loaded models from LM Studio SDK...')
+
     const loadedModels = await connection.client.llm.listLoaded()
-    console.log("Loaded models:", loadedModels)
-    
+    console.log('Loaded models:', loadedModels)
+
     if (!loadedModels || loadedModels.length === 0) {
-      console.log("No loaded models found")
+      console.log('No loaded models found')
       return []
     }
-    
+
     return loadedModels
   } catch (error: any) {
-    console.error("Failed to fetch models from LM Studio:", error)
+    console.error('Failed to fetch models from LM Studio:', error)
     return []
   }
 }
@@ -89,7 +89,7 @@ export const loadModel = async (
   try {
     const model = await connection.client.llm.model(modelId)
     console.log(`Loaded model: ${modelId}`)
-    
+
     // Return new connection state with loaded model
     return {
       ...connection,
@@ -111,7 +111,7 @@ export const streamChat = async (
   try {
     const prediction = model.respond([
       {
-        role: "user",
+        role: 'user',
         content: message,
       },
     ])
@@ -126,7 +126,7 @@ export const streamChat = async (
     // Wait for completion
     await prediction
   } catch (error: any) {
-    console.error("Streaming error:", error)
+    console.error('Streaming error:', error)
     throw error
   }
 }
@@ -139,13 +139,13 @@ export const getResponse = async (
   try {
     const result = await model.respond([
       {
-        role: "user",
+        role: 'user',
         content: message,
       },
     ])
     return result.content
   } catch (error: any) {
-    console.error("Response error:", error)
+    console.error('Response error:', error)
     throw error
   }
 }
@@ -158,6 +158,8 @@ export const hasLoadedModel = (
 }
 
 // Helper function to check if connection is valid
-export const isValidConnection = (connection: LMStudioConnection | null): connection is LMStudioConnection => {
+export const isValidConnection = (
+  connection: LMStudioConnection | null
+): connection is LMStudioConnection => {
   return connection !== null && connection.client !== null
 }

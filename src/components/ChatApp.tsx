@@ -1,10 +1,10 @@
-import React from 'react';
-import { useLMStudio } from '../hooks/useLMStudio';
-import ConnectionStatus from './ConnectionStatus';
-import MessageList from './MessageList';
-import MessageInput from './MessageInput';
-import ModelSelector from './ModelSelector';
-import ClearButton from './ClearButton';
+import React from 'react'
+import { useLMStudio } from '../hooks/useLMStudio'
+import ConnectionStatus from './ConnectionStatus'
+import MessageList from './MessageList'
+import MessageInput from './MessageInput'
+import ModelSelector from './ModelSelector'
+import ClearButton from './ClearButton'
 
 // Declarative ChatApp component
 const ChatApp: React.FC = () => {
@@ -18,20 +18,20 @@ const ChatApp: React.FC = () => {
     selectModel,
     reconnect,
     canSendMessage,
-    hasMessages
-  } = useLMStudio();
+    hasMessages,
+  } = useLMStudio()
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      <ConnectionStatus 
-        isConnected={state.isConnected} 
+    <div className='flex flex-col h-screen bg-gray-50'>
+      <ConnectionStatus
+        isConnected={state.isConnected}
         error={state.error}
         onReconnect={reconnect}
       />
-      
+
       {state.isConnected && (
-        <div className="px-6 py-3 bg-white border-b border-gray-200">
-          <div className="flex items-center justify-between">
+        <div className='px-6 py-3 bg-white border-b border-gray-200'>
+          <div className='flex items-center justify-between'>
             <ModelSelector
               models={models}
               currentModel={currentModel}
@@ -39,25 +39,19 @@ const ChatApp: React.FC = () => {
               isLoading={isLoadingModels}
               disabled={state.isLoading}
             />
-            
+
             {hasMessages && (
-              <ClearButton
-                onClick={clearChat}
-                disabled={state.isLoading}
-              />
+              <ClearButton onClick={clearChat} disabled={state.isLoading} />
             )}
           </div>
         </div>
       )}
-      
-      <MessageList messages={state.messages} />
-      
-      <MessageInput 
-        onSend={sendMessage}
-        disabled={!canSendMessage}
-      />
-    </div>
-  );
-};
 
-export default ChatApp;
+      <MessageList messages={state.messages} />
+
+      <MessageInput onSend={sendMessage} disabled={!canSendMessage} />
+    </div>
+  )
+}
+
+export default ChatApp
